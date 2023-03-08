@@ -1,5 +1,6 @@
 import hashlib
 import os
+import shutil
 import sqlite3
 from pathlib import Path
 
@@ -217,12 +218,11 @@ class PluginsHandler:
 
         payload = {'pluginId': plugin_id, 'version': version}
 
+        plugins_dir_str = ''.join([self.plugins_store_dir, plugin_id.replace(' ', '_'), '/', version, '/'])
+        plugins_dir = Path(plugins_dir_str)
+        if not plugins_dir.exists():
+            plugins_dir.mkdir(parents=True, exist_ok=True)
         try:
-            plugins_dir_str = ''.join([self.plugins_store_dir, plugin_id.replace(' ', '_'), '/', version, '/'])
-            plugins_dir = Path(plugins_dir_str)
-            if not Path(plugins_dir_str).exists():
-                plugins_dir.mkdir(parents=True, exist_ok=True)
-
             real_location, plugin_file_path = dl.download_file(
                 ''.join([self.jetbrains_plugins_site, 'plugin/download']),
                 headers=headers, params=payload, proxies=self.proxies, store_dir=plugins_dir_str)
@@ -237,6 +237,9 @@ class PluginsHandler:
 
         except Exception:
             self.logger.error('[{}][{}] download failed'.format(plugin_id, version), exc_info=True)
+            shutil.rmtree(plugins_dir)
+            plugin_update_archive = None
+            file_md5sum = None
 
         return plugin_update_archive, file_md5sum
 

@@ -24,4 +24,4 @@ loggers:
     propagate: no
 
 root:
-  handlers: [console]
+  handlers: [console, file]

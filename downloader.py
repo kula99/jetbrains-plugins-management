@@ -6,7 +6,6 @@ from pathlib import Path
 
 import requests
 
-
 DEFAULT_SECTION_SIZE = 5 * 1024 * 1024
 
 
@@ -49,7 +48,7 @@ def download_file(url, params=None, store_dir='./', file_name='unnamed', overwri
                 multi_thread_download(url, file_size=int(content_length), file_path=file_store_path,
                                       params=params, **kwargs)
             else:
-                simple_download(url, file_path=file_store_path, params=params, **kwargs)
+                simple_download(url, file_path=file_store_path, params=params, overwrite=overwrite, **kwargs)
 
     return url, file_store_path
 
@@ -64,17 +63,15 @@ def multi_thread_download(url, file_size=0, file_path='.', params=None, thread_c
     :param thread_count: 线程数，默认5
     :return:
     """
-    # 创建空文件
     with open(file_path, 'wb') as f:
-        pass
+        f.truncate()
 
     futures = []
     with ThreadPoolExecutor(max_workers=thread_count) as p:
         for start_pos, end_pos in calc_range(file_size):
-            # futures.append(p.submit(range_download, url, file_path, headers, payload, start_pos, end_pos, proxies))
             futures.append(p.submit(range_download, url, file_path, params, start_pos, end_pos, **kwargs))
 
-    as_completed(futures)
+        as_completed(futures)
 
 
 def calc_range(file_size, chunk=DEFAULT_SECTION_SIZE):
@@ -111,18 +108,19 @@ def range_download(url, file_path='.', params=None, start_pos=0, end_pos=0, **kw
     simple_download(url, file_path=file_path, params=params, start_pos=start_pos, **range_kwargs)
 
 
-def simple_download(url, file_path='.', params=None, start_pos=0, **kwargs):
+def simple_download(url, file_path='.', params=None, start_pos=0, overwrite=False, **kwargs):
     """
     单线程下载
     :param url: 请求地址
     :param file_path: 文件存储绝对路径
     :param params: 请求参数
     :param start_pos: 分段开始位置，单线程默认为0
+    :param overwrite: 如果目标文件已经存在，是否覆盖原文件
     :return: 无
     """
-    if not Path(file_path).exists():
+    if overwrite or not Path(file_path).exists():
         with open(file_path, 'wb') as f:
-            pass
+            f.truncate()
 
     response = requests.get(url, params=params, **kwargs)
     with open(file_path, 'rb+') as f:
