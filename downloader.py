@@ -31,15 +31,7 @@ def download_file(url, params=None, store_dir='./', file_name='unnamed', overwri
                              overwrite=overwrite, **kwargs)
 
     elif response.status_code == 200:
-        content_type = response.headers['Content-Type']
-        if content_type in ('application/zip', 'application/java-archive'):
-            v, params = cgi.parse_header(response.headers['Content-Disposition'])
-            file_name = params['filename']
-        elif content_type in ('application/octet-stream', 'text/plain; charset=UTF-8', 'text/xml; charset=UTF-8'):
-            pattern = re.compile('[^/]+(?!.*/)')
-            search_result = pattern.search(url[:url.find('?')])
-            if search_result:
-                file_name = search_result.group()
+        file_name = extract_file_name(file_name, response, url)
 
         file_store_path = ''.join([store_dir, file_name])
         if overwrite or not Path(file_store_path).exists():
@@ -51,6 +43,19 @@ def download_file(url, params=None, store_dir='./', file_name='unnamed', overwri
                 simple_download(url, file_path=file_store_path, params=params, overwrite=overwrite, **kwargs)
 
     return url, file_store_path
+
+
+def extract_file_name(file_name, response, url):
+    content_type = response.headers['Content-Type']
+    if content_type in ('application/zip', 'application/java-archive'):
+        v, params = cgi.parse_header(response.headers['Content-Disposition'])
+        file_name = params['filename']
+    elif content_type in ('application/octet-stream', 'text/plain; charset=UTF-8', 'text/xml; charset=UTF-8'):
+        pattern = re.compile('[^/]+(?!.*/)')
+        search_result = pattern.search(url[:url.find('?')])
+        if search_result:
+            file_name = search_result.group()
+    return file_name
 
 
 def multi_thread_download(url, file_size=0, file_path='.', params=None, thread_count=5, **kwargs):
@@ -104,7 +109,7 @@ def range_download(url, file_path='.', params=None, start_pos=0, end_pos=0, **kw
     range_kwargs = {}
     if kwargs:
         range_kwargs = copy.deepcopy(kwargs)
-        range_kwargs['headers'].update({'Range': 'bytes={}-{}'.format(start_pos, end_pos)})
+    range_kwargs['headers'].update({'Range': 'bytes={}-{}'.format(start_pos, end_pos)})
     simple_download(url, file_path=file_path, params=params, start_pos=start_pos, **range_kwargs)
 
 

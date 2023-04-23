@@ -1,11 +1,13 @@
 import hashlib
 import os
+import re
 import shutil
 import sqlite3
 from pathlib import Path
 
 import requests
 import yaml
+from cmp_version import cmp_version
 from lxml import etree
 
 import downloader as dl
@@ -30,7 +32,6 @@ class PluginsHandler:
         self.work_dir = os.path.dirname(__file__)
         self.plugins_db = ''.join([os.path.dirname(__file__), '/', 'plugins.db'])
         self.plugins_store_dir = None
-        # self.update_plugins_xml = None
 
         self.proxies = None
         self.logger = log_utils.get_simple_logger()
@@ -80,118 +81,120 @@ class PluginsHandler:
         解析下载的插件xml文件，将插件信息保存至本地sqlite
         :return: None
         """
-        conn = sqlite3.connect(self.plugins_db)
-        idea_version = ''.join([product_code, '-', build_version])
-        plugins_list = ''.join([self.work_dir, '/plugins_list_', idea_version, '.xml'])
-        tree = etree.parse(plugins_list, etree.XMLParser(strip_cdata=False))
-        root = tree.getroot()
-        for node_idea_plugin in root.iter('idea-plugin'):
-            node_name = node_idea_plugin.find('name').text
-            node_id = node_idea_plugin.find('id').text
-            node_description = node_idea_plugin.find('description').text
-            node_version = node_idea_plugin.find('version').text
-            node_change_notes = node_idea_plugin.find('change-notes').text
-            node_idea_version = node_idea_plugin.find('idea-version')
-            attr_idea_version = node_idea_version.attrib
-            attr_since_build = attr_idea_version.get('since-build')
-            attr_until_build = attr_idea_version.get('until-build')
-            node_rating = node_idea_plugin.find('rating').text
-            attr_archive_size = node_idea_plugin.attrib.get('size')
-            attr_release_time = node_idea_plugin.attrib.get('date')
-            nodes_tags = node_idea_plugin.findall('tags')
-            tags_content = ''
-            for tag in nodes_tags:
-                tags_content = ''.join([tags_content, tag.text, ','])
+        with sqlite3.connect(self.plugins_db) as conn:
+            conn.create_function('version_compare', 2, cmp_version)
+            idea_version = ''.join([product_code, '-', build_version])
+            plugins_list = ''.join([self.work_dir, '/plugins_list_', idea_version, '.xml'])
+            tree = etree.parse(plugins_list, etree.XMLParser(strip_cdata=False))
+            root = tree.getroot()
+            for node_idea_plugin in root.iter('idea-plugin'):
+                node_name = node_idea_plugin.find('name').text
+                node_id = node_idea_plugin.find('id').text
+                node_description = node_idea_plugin.find('description').text
+                node_version = node_idea_plugin.find('version').text
+                node_change_notes = node_idea_plugin.find('change-notes').text
+                node_idea_version = node_idea_plugin.find('idea-version')
+                attr_idea_version = node_idea_version.attrib
+                attr_since_build = attr_idea_version.get('since-build')
+                attr_until_build = attr_idea_version.get('until-build')
+                node_rating = node_idea_plugin.find('rating').text
+                attr_archive_size = node_idea_plugin.attrib.get('size')
+                attr_release_time = node_idea_plugin.attrib.get('date')
+                nodes_tags = node_idea_plugin.findall('tags')
+                tags_content = ''
+                for tag in nodes_tags:
+                    tags_content = ''.join([tags_content, tag.text, ','])
 
-            if len(tags_content) > 0:
-                tags_content = tags_content[:-1]
+                if len(tags_content) > 0:
+                    tags_content = tags_content[:-1]
 
-            add_new_plugin = '''
-                insert into plugins_info(name, id, description, version, change_notes, since_build, until_build, 
-                                         rating, archive_size, release_time, tags)
-                select ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?/1000, 'unixepoch', 'localtime'), ?
-                 where not exists (select 1 from plugins_info where id = ? and version = ?)
-            '''
-            conn.execute(add_new_plugin, (node_name, node_id, node_description, node_version, node_change_notes,
-                                          attr_since_build, attr_until_build, node_rating, attr_archive_size,
-                                          attr_release_time, tags_content, node_id, node_version))
+                add_new_plugin = '''
+                    insert into plugins_info(name, id, description, version, change_notes, since_build, until_build, 
+                                             rating, archive_size, release_time, tags)
+                    select ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(?/1000, 'unixepoch', 'localtime'), ?
+                     where not exists (select 1 from plugins_info where id = ? and version = ?)
+                '''
+                conn.execute(add_new_plugin, (node_name, node_id, node_description, node_version, node_change_notes,
+                                              attr_since_build, attr_until_build, node_rating, attr_archive_size,
+                                              attr_release_time, tags_content, node_id, node_version))
 
-            update_old_support_version = '''
-                update support_version set latest_version = 0, update_time = datetime('now', 'localtime')
-                 where id = ? and version < ? and product_code = ? and build_version =? and latest_version = 1
-            '''
-            conn.execute(update_old_support_version, (node_id, node_version, product_code, build_version))
+                update_old_support_version = '''
+                    update support_version set latest_version = 0, update_time = datetime('now', 'localtime')
+                     where id = ? and version_compare(version, ?) < 0 and product_code = ? and build_version =? 
+                       and latest_version = 1
+                '''
+                conn.execute(update_old_support_version, (node_id, re.sub(r'(?=[-+]).*', '', node_version),
+                                                          product_code, build_version))
 
-            add_support_version = '''
-                insert or ignore into support_version(id, version, product_code, build_version)
-                values(?, ?, ?, ?)
-            '''
+                add_support_version = '''
+                    insert or ignore into support_version(id, version, product_code, build_version)
+                    values(?, ?, ?, ?)
+                '''
 
-            conn.execute(add_support_version, (node_id, node_version, product_code, build_version))
+                conn.execute(add_support_version, (node_id, node_version, product_code, build_version))
 
-        conn.commit()
-        conn.close()
+            conn.commit()
+            # conn.close()
 
     def generate_update_plugins_xml(self, product_code, build_version):
         """
         生成updatePlugins.xml文件，并下载对应版本的插件
         :return:
         """
-        conn = sqlite3.connect(self.plugins_db)
+        with sqlite3.connect(self.plugins_db) as conn:
+            root = etree.Element('plugins')
 
-        root = etree.Element('plugins')
-
-        get_latest_plugins = '''
-            select a.name, a.id, a.description, a.version, a.change_notes, a.since_build, a.until_build, a.rating
-              from plugins_info a, white_list b, support_version c
-             where a.id = b.plugin_id
-               and a.id = c.id
-               and a.version = c.version
-               and c.product_code = ?
-               and c.build_version = ?
-               and c.latest_version = 1
-        '''
-
-        query_result = conn.execute(get_latest_plugins, (product_code, build_version))
-        for row in query_result:
-            plugin_info = PluginInfo()
-            plugin_info.name = row[0]
-            plugin_info.id = row[1]
-            plugin_info.description = row[2]
-            plugin_info.version = row[3]
-            plugin_info.change_notes = row[4]
-            plugin_info.since_build = row[5]
-            plugin_info.until_build = row[6]
-            plugin_info.rating = row[7]
-            self.logger.debug('name = {}, id = {}'.format(plugin_info.name, plugin_info.id))
-
-            query_download_info = '''
-                select id, version, archive_name, md5 from download_info where id = ? and version = ?
+            get_latest_plugins = '''
+                select a.name, a.id, a.description, a.version, a.change_notes, a.since_build, a.until_build, a.rating
+                  from plugins_info a, white_list b, support_version c
+                 where a.id = b.plugin_id
+                   and a.id = c.id
+                   and a.version = c.version
+                   and c.product_code = ?
+                   and c.build_version = ?
+                   and c.latest_version = 1
             '''
 
-            query_result_di = conn.execute(query_download_info, (plugin_info.id, plugin_info.version))
-            download_info = query_result_di.fetchone()
-            if download_info:
-                # print('{} {} has been downloaded, skip'.format(plugin_info.id, plugin_info.version))
-                self.logger.info('[{}][{}] has been downloaded, skip'.format(plugin_info.id, plugin_info.version))
-                self.generate_node_info(download_info[2], root, plugin_info)
-                continue
+            query_result = conn.execute(get_latest_plugins, (product_code, build_version))
+            for row in query_result:
+                plugin_info = PluginInfo()
+                plugin_info.name = row[0]
+                plugin_info.id = row[1]
+                plugin_info.description = row[2]
+                plugin_info.version = row[3]
+                plugin_info.change_notes = row[4]
+                plugin_info.since_build = row[5]
+                plugin_info.until_build = row[6]
+                plugin_info.rating = row[7]
+                self.logger.debug('name = {}, id = {}'.format(plugin_info.name, plugin_info.id))
 
-            self.logger.info('begin to download [{}][{}]'.format(plugin_info.id, plugin_info.version))
-            plugin_archive_name, file_md5sum = self.download_plugin(plugin_info.id, plugin_info.version)
-            # 下载成功再写入xml文件
-            if plugin_archive_name:
-                self.logger.info('download [{}][{}] finished, save info'.format(plugin_info.id, plugin_info.version))
-                record_download_file_md5sum = '''
-                    insert into download_info(id, version, archive_name, md5) values(?, ?, ?, ?)
+                query_download_info = '''
+                    select id, version, archive_name, md5 from download_info where id = ? and version = ?
                 '''
-                conn.execute(record_download_file_md5sum,
-                             (plugin_info.id, plugin_info.version, plugin_archive_name, file_md5sum))
 
-                self.generate_node_info(plugin_archive_name, root, plugin_info)
+                query_result_di = conn.execute(query_download_info, (plugin_info.id, plugin_info.version))
+                download_info = query_result_di.fetchone()
+                if download_info:
+                    # print('{} {} has been downloaded, skip'.format(plugin_info.id, plugin_info.version))
+                    self.logger.info('[{}][{}] has been downloaded, skip'.format(plugin_info.id, plugin_info.version))
+                    self.generate_node_info(download_info[2], root, plugin_info)
+                    continue
 
-        conn.commit()
-        conn.close()
+                self.logger.info('begin to download [{}][{}]'.format(plugin_info.id, plugin_info.version))
+                plugin_archive_name, file_md5sum = self.download_plugin(plugin_info.id, plugin_info.version)
+                # 下载成功再写入xml文件
+                if plugin_archive_name:
+                    self.logger.info('download [{}][{}] finished, save info'.format(plugin_info.id, plugin_info.version))
+                    record_download_file_md5sum = '''
+                        insert into download_info(id, version, archive_name, md5) values(?, ?, ?, ?)
+                    '''
+                    conn.execute(record_download_file_md5sum,
+                                 (plugin_info.id, plugin_info.version, plugin_archive_name, file_md5sum))
+
+                    self.generate_node_info(plugin_archive_name, root, plugin_info)
+
+            conn.commit()
+            # conn.close()
 
         plugins_dir = Path(self.plugins_store_dir)
         if not plugins_dir.exists():
@@ -279,20 +282,20 @@ class PluginsHandler:
         node_rating.text = plugin_info.rating
 
     def get_ide_versions(self):
-        conn = sqlite3.connect(self.plugins_db)
-        conn.row_factory = sqlite3.Row
-        cur = conn.cursor()
-        query_ide_versions = '''
-            select product_code, build_version, version from ide_version 
-             order by product_code, build_version desc
-        '''
-        cur.execute(query_ide_versions)
+        with sqlite3.connect(self.plugins_db) as conn:
+            conn.row_factory = sqlite3.Row
+            cur = conn.cursor()
+            query_ide_versions = '''
+                select product_code, build_version, version from ide_version 
+                 order by product_code, build_version desc
+            '''
+            cur.execute(query_ide_versions)
 
-        ide_versions = cur.fetchall()
-        cur.close()
-        conn.close()
+            ide_versions = cur.fetchall()
+            cur.close()
+            # conn.close()
 
-        return ide_versions
+            return ide_versions
 
     def get_plugin_detail(self, plugin_xml_id):
         headers = {
