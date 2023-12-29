@@ -1,9 +1,23 @@
-default:
-  jetbrains_plugins_site: "https://plugins.jetbrains.com/"
-  repo_url: "https://mysite.com/jetbrains/plugins/"
-  user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
-  work_dir: ""
+jetbrains_plugins_site: "https://plugins.jetbrains.com/"
+jetbrains_data_services: "https://data.services.jetbrains.com/"
+repo_url: "http://local.example.com/jetbrains/plugins/"
+nexus_repo_url: "http://local.example.com/repository/intellij-plugins/com/jetbrains/plugins/"
+user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; X64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
+work_dir: "./repository"
+upload_dir: "./repository/plugins"
+support_product_codes: "IIC,PCC"
+support_earliest_build_version: "232"
 
 proxy:
   enable: False
   address: ""
+
+database:
+  type: "mysql"
+  host: "0.0.0.0"
+  port: 3306
+  user: "user"
+  password: ""
+  sys_pub_key: "keys/pub.pem"
+  app_pri_key: "keys/pri.pem"
+  db: "db"

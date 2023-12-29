@@ -1,5 +1,6 @@
 import cgi
 import copy
+import os
 import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -7,9 +8,10 @@ from pathlib import Path
 import requests
 
 DEFAULT_SECTION_SIZE = 5 * 1024 * 1024
+DEFAULT_TIMEOUT = 300
 
 
-def download_file(url, params=None, store_dir='./', file_name='unnamed', overwrite=False, **kwargs):
+def download_file(url, params=None, store_dir=os.path.dirname(__file__), file_name='unnamed', overwrite=False, **kwargs):
     """
     下载文件
     :param url: 请求地址
@@ -46,9 +48,16 @@ def download_file(url, params=None, store_dir='./', file_name='unnamed', overwri
 
 
 def extract_file_name(file_name, response, url):
+    """
+    提取文件名
+    :param file_name: 缺省文件名，如果从响应中取不到文件名则默认用这个
+    :param response: 请求响应
+    :param url: 请求url
+    :return: 文件名
+    """
     content_type = response.headers['Content-Type']
     if content_type in ('application/zip', 'application/java-archive'):
-        v, params = cgi.parse_header(response.headers['Content-Disposition'])
+        _, params = cgi.parse_header(response.headers['Content-Disposition'])
         file_name = params['filename']
     elif content_type in ('application/octet-stream', 'text/plain; charset=UTF-8', 'text/xml; charset=UTF-8'):
         pattern = re.compile('[^/]+(?!.*/)')
@@ -127,7 +136,7 @@ def simple_download(url, file_path='.', params=None, start_pos=0, overwrite=Fals
         with open(file_path, 'wb') as f:
             f.truncate()
 
-    response = requests.get(url, params=params, **kwargs)
+    response = requests.get(url, params=params, timeout=DEFAULT_TIMEOUT, **kwargs)
     with open(file_path, 'rb+') as f:
         if start_pos > 0:
             f.seek(start_pos)

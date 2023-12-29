@@ -1,24 +1,39 @@
 from plugins_handler import PluginsHandler
-import log_utils
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from log_utils import logger
 
-if __name__ == '__main__':
-    logger = log_utils.get_simple_logger()
+
+def main_process(thread_count=5):
     handler = PluginsHandler()
 
     logger.info('===== start to update plugins =====')
     ides = handler.get_ide_versions()
-    for ide in ides:
-        if not ide[0] or not ide[1]:
-            logger.info('product_code or build_version not provided, skip')
-            continue
+    futures = []
+    with ThreadPoolExecutor(max_workers=thread_count) as p:
+        for ide in ides:
+            futures.append(p.submit(get_plugins_list, handler, ide[0], ide[2], ide[1]))
+        as_completed(futures)
 
-        logger.info('===== update [{} {} (Release Version: {})] plugin list begin ====='.format(ide[0], ide[2], ide[1]))
-        try:
-            handler.get_supported_plugins_list(ide[0], ide[1])
-            handler.save_plugins_info(ide[0], ide[1])
-            handler.generate_update_plugins_xml(ide[0], ide[1])
-        except Exception:
-            logger.error('something went wrong during the update progress', exc_info=True)
-        logger.info('===== update [{} {} (Release Version: {})] plugin list end ====='.format(ide[0], ide[2], ide[1]))
+    logger.info('+++++ generate update plugins xml begin +++++')
+    handler.generate_all_update_plugins_xml()
+    logger.info('+++++ generate update plugins xml end +++++')
 
     logger.info('===== job finished =====')
+
+
+def get_plugins_list(handler, product_code, version, build_version):
+    logger.info('===== update [{} {} (Release Version: {})] plugin list begin ====='.format(product_code, version,
+                                                                                            build_version))
+    try:
+        handler.get_supported_plugins_list(product_code, build_version)
+        logger.info('download plugins list for {}-{} end'.format(product_code, build_version))
+        handler.save_plugins_info(product_code, build_version)
+        logger.info('save plugins info for {}-{} end'.format(product_code, build_version))
+    except Exception as e:
+        logger.exception('something went wrong during the update progress', e)
+    logger.info(
+        '===== update {} {} (Release Version: {})] plugin list end ====='.format(product_code, version, build_version))
+
+
+if __name__ == '__main__':
+    main_process()

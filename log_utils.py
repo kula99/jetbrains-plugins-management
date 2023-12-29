@@ -1,11 +1,10 @@
-import yaml
-import logging.config
-import os
+from loguru import logger
 
-
-def get_simple_logger():
-    with open(''.join([os.path.dirname(__file__), '/', 'logging.yaml']), 'r') as f:
-        log_conf = yaml.safe_load(f)
-
-    logging.config.dictConfig(log_conf)
-    return logging.getLogger('simple')
+logger.remove()  # remove the default stream handler that print the logs to the console
+logger.add('./logs/plugins_sync.log',
+           backtrace=True,
+           enqueue=True,
+           rotation='1 day',
+           retention='7 days',
+           delay=True,
+           level='INFO')
