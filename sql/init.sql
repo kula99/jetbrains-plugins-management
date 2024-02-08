@@ -99,7 +99,7 @@ CREATE TABLE vendor_info(
 );
 
 drop function if exists version_compare;
--- delimiter //
+delimiter //
 create
     function version_compare(version1 varchar(96), version2 varchar(96))
     returns int(1)  -- -1表示 version1 > version2，0表示相等，1表示 version1 < version2
@@ -143,5 +143,5 @@ begin
     until compare_result <> 0 or loop_count = loop_times
     end repeat;
     return compare_result;
-end;
---delimiter ;
+end; //
+delimiter ;

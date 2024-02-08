@@ -18,6 +18,10 @@ def main_process(thread_count=5):
     handler.generate_all_update_plugins_xml()
     logger.info('+++++ generate update plugins xml end +++++')
 
+    logger.info('+++++ download plugins to nexus begin +++++')
+    handler.download_plugin_archive(day_offset=-60)
+    logger.info('+++++ download plugins to nexus end +++++')
+
     logger.info('===== job finished =====')
 
 
@@ -32,7 +36,7 @@ def get_plugins_list(handler, product_code, version, build_version):
     except Exception as e:
         logger.exception('something went wrong during the update progress', e)
     logger.info(
-        '===== update {} {} (Release Version: {})] plugin list end ====='.format(product_code, version, build_version))
+        '===== update [{} {} (Release Version: {})] plugin list end ====='.format(product_code, version, build_version))
 
 
 if __name__ == '__main__':

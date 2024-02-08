@@ -9,6 +9,7 @@ from pathlib import Path
 import requests
 import yaml
 from lxml import etree
+from concurrent.futures import ThreadPoolExecutor
 
 import db_operator
 import downloader as dl
@@ -41,14 +42,15 @@ def generate_random_str(length=32):
 class PluginsHandler:
 
     def __init__(self):
-        self.work_dir = os.path.dirname(__file__)
-        self.plugins_db = ''.join([os.path.dirname(__file__), '/', 'plugins.db'])
+        app_dir = os.path.split(os.path.realpath(__file__))[0]
+        self.work_dir = app_dir
+        # self.plugins_db = ''.join([os.path.dirname(__file__), '/', 'plugins.db'])
         self.plugins_store_dir = None
 
         self.proxies = None
         self.logger = logger
 
-        with open(''.join([os.path.dirname(__file__), '/', 'application.yaml']), 'r') as f:
+        with open(''.join([app_dir, '/', 'application.yaml']), 'r') as f:
             app_conf = yaml.safe_load(f)
 
         self.jetbrains_plugins_site = app_conf['jetbrains_plugins_site']
@@ -62,8 +64,8 @@ class PluginsHandler:
 
         proxy_conf = app_conf['proxy']
         if proxy_conf['enable']:
-            self.proxies = {'http': proxy_conf['address'],
-                            'https': proxy_conf['address']
+            self.proxies = {'https': proxy_conf['address'],
+                            'http': proxy_conf['address'],
                             }
 
     def set_work_dir(self, work_dir):
@@ -171,8 +173,10 @@ class PluginsHandler:
                  where not exists (select 1 from plugins_version_info where id = %s and version = %s)
             '''
             db_operator.execute(add_new_plugin, (node_id_text, node_version_text, node_change_notes_text,
-                                                 attr_since_build, attr_until_build, node_rating_text, attr_archive_size,
-                                                 attr_release_time, tags_content, vendor_id, node_id_text, node_version_text))
+                                                 attr_since_build, attr_until_build, node_rating_text,
+                                                 attr_archive_size,
+                                                 attr_release_time, tags_content, vendor_id, node_id_text,
+                                                 node_version_text))
 
             move_old_support_version = '''
                 insert ignore into support_version_history(id, version, product_code, build_version)
@@ -188,8 +192,9 @@ class PluginsHandler:
                  where id = %s and version_compare(version, %s) > 0
                    and product_code = %s and build_version = %s
             '''
-            db_operator.execute(remove_old_support_version, (node_id_text, re.sub(r'(%s=[-+]).*', '', node_version_text),
-                                                             product_code, build_version))
+            db_operator.execute(remove_old_support_version,
+                                (node_id_text, re.sub(r'(%s=[-+]).*', '', node_version_text),
+                                 product_code, build_version))
 
             add_support_version = '''
                 insert ignore into support_version(id, version, product_code, build_version)
@@ -255,7 +260,7 @@ class PluginsHandler:
 
                 self.generate_node_info(plugin_archive_name, root, plugin_info)
 
-        self.write_xml(product_code,build_version, root)
+        self.write_xml(product_code, build_version, root)
 
         plugins_dir = Path(self.plugins_store_dir)
         if not plugins_dir.exists():
@@ -327,9 +332,7 @@ class PluginsHandler:
         node_plugin = etree.SubElement(root, 'plugin')
         node_plugin.set('id', plugin_info.id)
         if mode == 'nexus':
-            node_plugin.set('url', ''.join([self.nexus_repo_url, plugin_info.id.replace(' ', '+'), '/',
-                            plugin_info.version, '/', plugin_info.id.replace(' ', '+'), '_',
-                            plugin_info.version, plugin_info.archive_suffix]))
+            node_plugin.set('url', self.format_nexus_url(plugin_info))
         else:
             node_plugin.set('url', ''.join([self.repo_url, plugin_info.id.replace(' ', '_'), '/',
                                             plugin_info.version, '/', plugin_archive_name]))
@@ -354,6 +357,11 @@ class PluginsHandler:
             node_vendor.set('email', plugin_info.vendor_email)
         if plugin_info.vendor_url:
             node_vendor.set('url', plugin_info.vendor_url)
+
+    def format_nexus_url(self, plugin_info):
+        return ''.join([self.nexus_repo_url, plugin_info.id.replace(' ', '+'), '/',
+                        plugin_info.version, '/', plugin_info.id.replace(' ', '+'), '-',
+                        plugin_info.version, plugin_info.archive_suffix])
 
     @staticmethod
     def get_ide_versions():
@@ -394,7 +402,8 @@ class PluginsHandler:
         select x.id, x.version, y.id plugin_id
           from (select distinct a.id, a.version
                   from support_version a, white_list b
-                 where a.id = b.plugin_id) x
+                 where a.id = b.plugin_id
+                   and b.enabled = 1) x
           left join download_info y
             on x.id = y.id
            and x.version = y.version
@@ -423,6 +432,7 @@ class PluginsHandler:
                    c.rating, e.archive_suffix, d.product_code, d.build_version, f.name, f.email, f.url
               from white_list a, plugins_base_info b, plugins_version_info c, support_version d, download_info e, vendor_info f
              where a.plugin_id = b.id
+               and a.enabled = 1
                and a.plugin_id = c.id
                and a.plugin_id = d.id
                and c.version = d.version
@@ -457,7 +467,7 @@ class PluginsHandler:
             if not last_build_version:
                 last_build_version = row[10]
 
-            if last_build_version != row[0]:
+            if last_build_version != row[10]:
                 self.write_xml(last_product_code, last_build_version, root)
                 root = etree.Element('plugins')
 
@@ -480,6 +490,35 @@ class PluginsHandler:
         with open(update_plugins_xml, mode='wb') as f:
             f.write(etree.tostring(root_node, pretty_print=True, xml_declaration=True, encoding='utf-8'))
 
+    def download_plugin_archive(self, day_offset: int = 0):
+        get_recent_released_plugins = '''
+            select b.id, b.version, b.since_build, b.archive_size, b.release_time, c.archive_suffix
+              from white_list a, plugins_version_info b, download_info c
+             where a.enabled = 1
+               and a.plugin_id = b.id
+               and b.update_time >= {}
+               and b.id = c.id
+        '''
+
+        offset_date = 'CURDATE()'
+        if day_offset != 0:
+            offset_date = 'DATE_ADD(CURDATE(), INTERVAL {} day)'.format(day_offset)
+
+        plugins_info = db_operator.select(get_recent_released_plugins.format(offset_date))
+
+        with ThreadPoolExecutor(max_workers=5) as p:
+            for row in plugins_info:
+                plugin_info = PluginInfo()
+                plugin_info.id = row[0]
+                plugin_info.version = row[1]
+                plugin_info.since_build = row[2]
+                plugin_info.archive_size = row[3]
+                plugin_info.release_time = row[4]
+                plugin_info.archive_suffix = row[5]
+                url = self.format_nexus_url(plugin_info)
+                logger.info('start to download [{} {}] asynchronously'.format(plugin_info.id, plugin_info.version))
+                p.submit(dl.download_temp_file, url, self.work_dir)
+
 
 class PluginInfo:
     name = None
@@ -496,3 +535,4 @@ class PluginInfo:
     vendor_name = None
     vendor_email = None
     vendor_url = None
+    archive_suffix = None

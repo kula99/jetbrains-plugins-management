@@ -2,6 +2,7 @@ import cgi
 import copy
 import os
 import re
+import tempfile
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -24,7 +25,7 @@ def download_file(url, params=None, store_dir=os.path.dirname(__file__), file_na
     :return: 实际的地址（可能产生重定向），保存的文件绝对路径
     """
     file_store_path = None
-    response = requests.head(url, params=params, **kwargs)
+    response = requests.head(url, params=params, timeout=DEFAULT_TIMEOUT, **kwargs)
     if response.status_code in (301, 302):
         pattern = re.compile('(https?://)[^/]+')
         domain = pattern.search(url).group()
@@ -143,3 +144,15 @@ def simple_download(url, file_path='.', params=None, start_pos=0, overwrite=Fals
         for chunk in response.iter_content(chunk_size=512 * 1024):
             if chunk:
                 f.write(chunk)
+
+
+def download_temp_file(url, tmp_dir=None, **kwargs):
+    response = requests.get(url, stream=True, timeout=DEFAULT_TIMEOUT, **kwargs)
+    if response.status_code == 200:
+        with tempfile.NamedTemporaryFile(delete=True, dir=tmp_dir) as temp_file:
+            for chunk in response.iter_content(chunk_size=512 * 1024):
+                if chunk:
+                    temp_file.write(chunk)
+            temp_file.flush()
+
+            # os.remove(temp_file.name)
