@@ -1,42 +1,17 @@
-import hashlib
 import os
-import random
 import re
 import shutil
-import string
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
 import yaml
 from lxml import etree
-from concurrent.futures import ThreadPoolExecutor
 
 import db_operator
 import downloader as dl
+from common_utils import generate_random_str, get_file_md5sum
 from log_utils import logger
-
-
-def get_file_md5sum(file):
-    m = hashlib.md5()
-    with open(file, 'rb') as f:
-        while True:
-            file_data = f.read(2048)
-            if not file_data:
-                break
-
-            m.update(file_data)
-    return m.hexdigest()
-
-
-def generate_random_str(length=32):
-    """
-    生成一个指定长度的随机字符串，其中
-    string.digits=[0-9]
-    string.ascii_letters=[a-z][A-Z]
-    """
-    str_list = [random.choice(string.digits + string.ascii_letters) for _ in range(length)]
-    random_str = ''.join(str_list)
-    return random_str
 
 
 class PluginsHandler:
@@ -412,19 +387,22 @@ class PluginsHandler:
 
         plugins_without_suffix = db_operator.select(query_plugins_without_suffix)
         for row in plugins_without_suffix:
-            suffix = self.get_plugin_file_suffix(row[0], row[1])
+            try:
+                suffix = self.get_plugin_file_suffix(row[0], row[1])
 
-            if not row[2]:  # row[2]为download_info.id字段，为空表示该表没有此记录
-                record_plugin_file_suffix = '''
-                    insert into download_info(id, version, archive_name, archive_suffix) values(%s, %s, %s, %s)
-                '''
-                db_operator.execute(record_plugin_file_suffix,
-                                    (row[0], row[1], ''.join([row[0], '-', row[1], suffix]), suffix))
-            else:
-                update_plugin_file_suffix = '''
-                    update download_info set archive_suffix = %s, update_time = now() where id = %s and version = %s
-                '''
-                db_operator.execute(update_plugin_file_suffix, (suffix, row[0], row[1]))
+                if not row[2]:  # row[2]为download_info.id字段，为空表示该表没有此记录
+                    record_plugin_file_suffix = '''
+                        insert into download_info(id, version, archive_name, archive_suffix) values(%s, %s, %s, %s)
+                    '''
+                    db_operator.execute(record_plugin_file_suffix,
+                                        (row[0], row[1], ''.join([row[0], '-', row[1], suffix]), suffix))
+                else:
+                    update_plugin_file_suffix = '''
+                        update download_info set archive_suffix = %s, update_time = now() where id = %s and version = %s
+                    '''
+                    db_operator.execute(update_plugin_file_suffix, (suffix, row[0], row[1]))
+            except Exception as e:
+                logger.exception('check plugin suffix failed', e)
 
         # 按IDE版本排序获取其可用的插件
         query_plugins_for_xml = '''
@@ -498,6 +476,7 @@ class PluginsHandler:
                and a.plugin_id = b.id
                and b.update_time >= {}
                and b.id = c.id
+               and b.version = c.version
         '''
 
         offset_date = 'CURDATE()'

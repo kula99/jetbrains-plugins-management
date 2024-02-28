@@ -10,7 +10,7 @@ import db_operator
 class Manager:
 
     def __init__(self):
-        with open(''.join([os.path.dirname(__file__), '/', 'application.yaml']), 'r') as f:
+        with open(''.join([os.path.split(os.path.realpath(__file__))[0], '/', 'application.yaml']), 'r') as f:
             app_conf = yaml.safe_load(f)
 
         self.jetbrains_data_services = app_conf['jetbrains_data_services']
@@ -21,8 +21,8 @@ class Manager:
         self.proxies = {}
         proxy_conf = app_conf['proxy']
         if proxy_conf['enable']:
-            self.proxies.update({'http': proxy_conf['address'],
-                                 'https': proxy_conf['address']
+            self.proxies.update({'https': proxy_conf['address'],
+                                 'http': proxy_conf['address']
                                  })
 
     def check_updates(self):

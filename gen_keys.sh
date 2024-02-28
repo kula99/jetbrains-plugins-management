@@ -1,7 +1,7 @@
 echo ${1}
 
 echo "-------------------------"
-echo key_dir=keys/${1}
+key_dir=keys/${1}
 mkdir -p ${key_dir}
 
 key_len=2048
@@ -12,9 +12,9 @@ fi
 echo "key_len is set to ${key_len}"
 
 # 生成私钥
-openssl genrsa -out ${key_dir}/$(1)_key_rsa.pem ${key-len}
+openssl genrsa -out ${key_dir}/${1}_key_rsa.pem ${key_len}
 # 私钥转成pkcs8格式
-openssl pkcs8 -in $ikey-dirl/${1}_key_rsa.pem -out ${key-dir}/${1}_priv_pkcs8.pem -nocrypt -topk8
+openssl pkcs8 -in ${key_dir}/${1}_key_rsa.pem -out ${key_dir}/${1}_priv_pkcs8.pem -nocrypt -topk8
 # 提取公钥
 openssl rsa -in ${key_dir}/${1}_key_rsa.pem -out ${key_dir}/${1}_pub_rsa.pem - RSAPublicKey_out
 # 公钥转成pkcs8格式

@@ -69,6 +69,8 @@ CREATE TABLE plugins_base_info(
     name VARCHAR(128) NOT NULL,
     id VARCHAR(96) NOT NULL,
     description TEXT,
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(id)
 );
 
@@ -96,6 +98,15 @@ CREATE TABLE vendor_info(
     create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY(id)
+);
+
+CREATE TABLE tmp_ticket(
+    ticket VARCHAR(32) NOT NULL,
+    access_token VARCHAR(128) NOT NULL,
+    user_name VARCHAR(64),
+    create_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    update_time DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY(ticket)
 );
 
 drop function if exists version_compare;
