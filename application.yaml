@@ -1,12 +1,22 @@
 jetbrains_plugins_site: "https://plugins.jetbrains.com/"
 jetbrains_data_services: "https://data.services.jetbrains.com/"
 repo_url: "http://local.example.com/jetbrains/plugins/"
-nexus_repo_url: "http://local.example.com/repository/intellij-plugins/com/jetbrains/plugins/"
-user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; X64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/100.0.4896.127 Safari/537.36"
-work_dir: "./repository"
-upload_dir: "./repository/plugins"
+user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; X64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36 Edge/122.0.0.0"
+work_dir: "/data/repository"
+gitee_api: "https://gitee.com/api/v5"
+upload_dir: "/data/repository/plugins"
 support_product_codes: "IIC,PCC"
-support_earliest_build_version: "232"
+support_earliest_build_version: "233"
+max_content_length: 1048576
+
+nexus:
+  repo_url: "http://local.example.com/repository/intellij-market"
+  intellij_public: "/com/jetbrains/plugins/"
+  intellij_releases: "/com/potato/plugins/"
+  api_url: "http://local.example.com/service/rest/v1"
+  release_repo_id: "intellij-releases"
+  publish_user: "nexus"
+  publish_pass: "changeit"
 
 proxy:
   enable: False
@@ -14,10 +24,13 @@ proxy:
 
 database:
   type: "mysql"
-  host: "0.0.0.0"
+  host: "127.0.0.1"
   port: 3306
   user: "user"
-  password: ""
-  sys_pub_key: "keys/pub.pem"
-  app_pri_key: "keys/pri.pem"
+  password: "changeit"
+  sys_pub_key: "keys/test_sys/test_sys_pub_rsa.pem"
+  app_pri_key: "keys/test_app/test_app_key_rsa.pem"
   db: "db"
+
+peewee:
+  log_sql: False

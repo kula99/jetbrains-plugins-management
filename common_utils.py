@@ -1,4 +1,5 @@
 import hashlib
+import re
 import string
 import random
 
@@ -24,3 +25,20 @@ def generate_random_str(length=32):
     str_list = [random.choice(string.digits + string.ascii_letters) for _ in range(length)]
     random_str = ''.join(str_list)
     return random_str
+
+
+def log2sql(log: str):
+    datetime_pattern = r'(\d{4}-\d{1,2}-d{1,2}\s\d{1,2}:\d{1,2}:\d{1,2})'
+    # datetime_repl = lambda x: '"{}"'.format(x.group())
+    result = []
+    for s in log.strip().split('\n'):
+        sql, params = eval(s)
+        for param in params:
+            if isinstance(param, int):
+                sql = sql.replace('%s', str(param), 1)
+            else:
+                sql = sql.replace('%s', '\'{}\''.format(str(param)), 1)
+        sql = sql.replace("None", "NULL")
+        sql = re.sub(pattern=datetime_pattern, repl=lambda x: '"{}"'.format(x.group()), string=sql)
+        result.append(sql)
+    return result
