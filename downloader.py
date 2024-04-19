@@ -27,9 +27,13 @@ def download_file(url, params=None, store_dir=os.path.dirname(__file__), file_na
     file_store_path = None
     response = requests.head(url, params=params, timeout=DEFAULT_TIMEOUT, **kwargs)
     if response.status_code in (301, 302):
-        pattern = re.compile('(https?://)[^/]+')
-        domain = pattern.search(url).group()
-        url = ''.join([domain, response.headers.get('Location')])
+        redirect_location = response.headers.get('Location')
+        if redirect_location.startswith('https') or redirect_location.startswith('http'):
+            url = redirect_location
+        else:
+            pattern = re.compile('(https?://)[^/]+')
+            domain = pattern.search(url).group()
+            url = ''.join([domain, redirect_location])
         return download_file(url, params=params, store_dir=store_dir, file_name=file_name,
                              overwrite=overwrite, **kwargs)
 
