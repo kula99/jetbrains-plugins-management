@@ -25,7 +25,7 @@ class PluginsHandler:
         self.plugins_store_dir = None
 
         self.proxies = None
-        self.logger = logger
+        # self.logger = logger
 
         with open(''.join([app_dir, '/', 'application.yaml']), 'r') as f:
             app_conf = yaml.safe_load(f)
@@ -211,7 +211,7 @@ class PluginsHandler:
                                      headers=headers, plugin_file_path=plugin_file_path)
 
         except Exception as e:
-            self.logger.exception('[{}][{}] download failed'.format(plugin_id, version), e)
+            logger.exception('[{}][{}] download failed'.format(plugin_id, version), e)
             shutil.rmtree(plugins_dir)
             plugin_update_archive = None
             file_md5sum = None

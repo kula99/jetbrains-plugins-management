@@ -305,3 +305,10 @@ def update_sync_status(product_code: str, build_version: str, status: str):
      .update(last_sync_status=status, last_sync_time=datetime.datetime.now())
      .where((IdeVersion.product_code == product_code) & (IdeVersion.build_version == build_version))
      .execute())
+
+
+def update_ide_versions(product_code: str, build_version: str, version: str):
+    (IdeVersion
+     .insert(product_code=product_code, build_version=build_version, version=version)
+     .on_conflict_ignore()
+     .execute())

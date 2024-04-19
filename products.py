@@ -4,7 +4,7 @@ import time
 import requests
 import yaml
 
-import db_operator
+import server_dao
 
 
 class Manager:
@@ -37,9 +37,6 @@ class Manager:
                                 headers=headers, params=payload, stream=True, proxies=self.proxies)
         resp_json = response.json()
 
-        store_ide_version = '''
-            insert ignore into ide_version(product_code, build_version, version) values(%s, %s, %s)
-        '''
         for item in resp_json:
             releases = item['releases']
             for rel in releases:
@@ -47,7 +44,7 @@ class Manager:
                 product_code = item['intellijProductCode']
                 version = rel['version']
                 if build_version[:build_version.find('.')] >= self.support_earliest_build_version:
-                    db_operator.execute(store_ide_version, (product_code, build_version, version))
+                    server_dao.update_ide_versions(product_code, build_version, version)
 
 
 if __name__ == '__main__':
