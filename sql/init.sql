@@ -157,24 +157,32 @@ begin
 
     repeat
         set loop_count = loop_count + 1;
-        select LPAD(SUBSTRING_INDEX(SUBSTRING_INDEX(version1, '.', loop_count), '.', -1), 32, '0'),
-               LPAD(SUBSTRING_INDEX(SUBSTRING_INDEX(version2, '.', loop_count), '.', -1), 32, '0')
+        select SUBSTRING_INDEX(SUBSTRING_INDEX(version1, '.', loop_count), '.', -1),
+               SUBSTRING_INDEX(SUBSTRING_INDEX(version2, '.', loop_count), '.', -1)
           into tmp_v1, tmp_v2;
 
-        if tmp_v1 = tmp_v2 then
+        if tmp_v1 = '*' or tmp_v2 = '*' then
             set compare_result = 0;
         else
-            select tmp_v1 < tmp_v2 into compare_result;
-            if compare_result = 0 then
-                set compare_result = -1;
-            end if;
-        end if;
+            select LPAD(tmp_v1, 32, '0'),
+                   LPAD(tmp_v2, 32, '0')
+              into tmp_v1, tmp_v2;
 
-        if loop_count = loop_times and compare_result = 0 then
-            if len1 > len2 then
-                set compare_result = -1;
-            elseif len1 < len2 then
-                set compare_result = 1;
+            if tmp_v1 = tmp_v2 then
+                set compare_result = 0;
+            else
+                select tmp_v1 < tmp_v2 into compare_result;
+                if compare_result = 0 then
+                    set compare_result = -1;
+                end if;
+            end if;
+
+            if loop_count = loop_times and compare_result = 0 then
+                if len1 > len2 then
+                    set compare_result = -1;
+                elseif len1 < len2 then
+                    set compare_result = 1;
+                end if;
             end if;
         end if;
     until compare_result <> 0 or loop_count = loop_times
