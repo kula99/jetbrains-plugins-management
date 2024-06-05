@@ -48,7 +48,7 @@ def update_tmp_ticket_step(ticket: str, step: int):
 def get_support_ide_range(since_build: str, until_build: str = None):
     return (IdeVersion.select(IdeVersion.product_code, IdeVersion.build_version, IdeVersion.version)
             .where((fn.version_compare(IdeVersion.build_version, since_build) <= 0)
-                   & (fn.ISNULL(until_build) | (fn.version_compare(IdeVersion.build_version, until_build) > 0)))
+                   & (fn.ISNULL(until_build) | (fn.version_compare(IdeVersion.build_version, until_build) >= 0)))
             .order_by(IdeVersion.build_version.desc()))
 
 
@@ -312,3 +312,21 @@ def update_ide_versions(product_code: str, build_version: str, version: str):
      .insert(product_code=product_code, build_version=build_version, version=version)
      .on_conflict_ignore()
      .execute())
+
+
+def check_internal_plugin_support_ide_version():
+    t_b = PluginsVersionInfo.alias()
+    t_c = VendorInfo.alias()
+    t_d = IdeVersion.alias()
+    return (WhiteList
+            .select(t_d.product_code, t_d.build_version, t_d.version, t_b.id, t_b.version.alias('plugin_version'))
+            .join(t_b, on=(WhiteList.plugin_id == t_b.id))
+            .join(t_c, on=((t_b.vendor_id == t_c.id) & (t_c.dev_type == 'internal')))
+            .switch(t_b)
+            .join(t_d, on=((fn.version_compare(t_d.build_version, t_b.since_build) <= 0)
+                           & ((fn.ISNULL(t_b.until_build))
+                              | (fn.version_compare(t_d.build_version, t_b.until_build) >= 0))
+                           & (t_d.create_time >= fn.DATE_ADD(fn.CURDATE(),
+                                                             NodeList((SQL('INTERVAL'), -5, SQL('DAY')))))))
+            .where(WhiteList.enabled == '1')
+            .order_by(t_b.id, t_d.build_version.desc(), t_b.create_time.desc()))

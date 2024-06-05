@@ -46,6 +46,22 @@ class Manager:
                 if build_version[:build_version.find('.')] >= self.support_earliest_build_version:
                     server_dao.update_ide_versions(product_code, build_version, version)
 
+        # 检查自定义插件是否支持新增的IDE版本
+        plugin_support_ide_info = server_dao.check_internal_plugin_support_ide_version()
+        last_row = None
+        update_list = []
+        i = 0
+        for row in plugin_support_ide_info.namedtuples().iterator():
+            if ((i == 0)
+                    or (last_row is not None
+                        and (last_row.id != row.id or last_row.build_version != row.build_version))):
+                update_list.append((row.id, row.plugin_version, row.product_code, row.build_version))
+
+            last_row = row
+            i += 1
+
+        server_dao.add_new_support_version(update_list)
+
 
 if __name__ == '__main__':
     Manager().check_updates()
