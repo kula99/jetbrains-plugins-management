@@ -64,7 +64,7 @@ def extract_file_name(file_name, response, url):
     if content_type in ('application/zip', 'application/java-archive'):
         _, params = cgi.parse_header(response.headers['Content-Disposition'])
         file_name = params['filename']
-    elif content_type in ('application/octet-stream', 'text/plain; charset=UTF-8', 'text/xml; charset=UTF-.8'):
+    elif content_type in ('application/octet-stream', 'text/plain; charset=UTF-8', 'text/xml; charset=UTF-8'):
         pattern = re.compile('[^/]+(?!.*/)')
         search_result = pattern.search(url[:url.find('?')])
         if search_result:
